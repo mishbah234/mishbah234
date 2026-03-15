@@ -106,10 +106,9 @@
                 videoThumbnail.style.display = 'none';
             }
 
-            // Direct URL from Google's servers — clicking this triggers browser native download
-            btnSave.href = data.direct_url;
-            // Native HTML5 download attribute to force download instead of watching in-browser
-            btnSave.setAttribute('download', '');
+            // Stream URL — clicking this triggers browser's native download
+            btnSave.href = `/api/stream/${data.task_id}`;
+            btnSave.removeAttribute('download');
             
             resultSection.classList.add('active');
 

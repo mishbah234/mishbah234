@@ -69,9 +69,11 @@ def index():
     return render_template("index.html", qualities=QUALITY_MAP)
 
 
+import imageio_ffmpeg
+
 @app.route("/api/extract", methods=["POST"])
 def api_extract():
-    """Extract direct download URL using yt-dlp. No server processing."""
+    """Extract video metadata without downloading. Returns a task_id."""
     import yt_dlp
 
     data = request.get_json(force=True)
@@ -81,15 +83,7 @@ def api_extract():
     if not video_url:
         return jsonify({"error": "No URL provided"}), 400
 
-    # For direct links, we must ensure it has BOTH video and audio together
-    # because browsers can't merge separate streams on the fly.
-    chosen = QUALITY_MAP.get(quality, QUALITY_MAP["best"])
-    height = chosen["height"]
-    
-    if height:
-        fmt = f"best[height<={height}][ext=mp4]/best[height<={height}]/best[ext=mp4]/best"
-    else:
-        fmt = "best[ext=mp4]/best"
+    fmt = _build_format(quality)
 
     ydl_opts = {
         "format": fmt,
@@ -98,8 +92,6 @@ def api_extract():
         "no_warnings": True,
         "socket_timeout": 30,
         "cookiefile": "cookies.txt",  
-        # IN 2024, YOUTUBE BLOCKS THE DEFAULT WEB AND ANDROID CLIENTS ON CLOUD IPS.
-        # We must spoof older clients or TV clients that don't enforce the 'po_token' bot checks yet.
         "extractor_args": {
             "youtube": {
                 "player_client": ["android_vr", "ios", "tv", "web"], 
@@ -112,21 +104,20 @@ def api_extract():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
             
-            # The direct URL to Google's video servers
-            direct_url = info.get("url")
-            if not direct_url:
-                raise Exception("Could not extract a direct download URL.")
-
             title = info.get("title", "video")
-            # We add a filename parameter to the URL to try and force a nice download name if possible
-            safe_title = _safe_filename(title)
-            if "?" in direct_url:
-                direct_url += f"&title={safe_title}"
-            else:
-                direct_url += f"?title={safe_title}"
+            task_id = uuid.uuid4().hex[:12]
+            
+            # Store everything we need to run the subprocess stream later
+            extractions[task_id] = {
+                "url": video_url,
+                "format": fmt,
+                "title": title,
+                "duration": info.get("duration"),
+                "thumbnail": info.get("thumbnail"),
+            }
 
             return jsonify({
-                "direct_url": direct_url,
+                "task_id": task_id,
                 "title": title,
                 "duration": info.get("duration"),
                 "thumbnail": info.get("thumbnail"),
@@ -136,6 +127,68 @@ def api_extract():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/stream/<task_id>")
+def api_stream(task_id):
+    """Stream the video directly to the browser via yt-dlp subprocess in MKV format."""
+    t = extractions.pop(task_id, None)
+    if not t:
+        return jsonify({"error": "Session expired or invalid file. Try again."}), 404
+
+    url = t["url"]
+    fmt = t["format"]
+    title = _safe_filename(t["title"])
+
+    # Path to the portable ffmpeg binary we installed via pip (imageio-ffmpeg)
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+
+    # We must use MKV for streaming.
+    # MP4 writes the 'moov' atom at the end of the file, which requires ffmpeg
+    # to seek backwards in the file. You cannot seek backwards in a pipestream!
+    cmd = [
+        sys.executable, "-m", "yt_dlp",
+        "-f", fmt,
+        "--merge-output-format", "mkv",
+        "--ffmpeg-location", ffmpeg_exe,
+        "-o", "-",              # Output to stdout directly
+        "--no-playlist",
+        "--retries", "10",
+        "--socket-timeout", "120",
+        "--quiet",
+        "--no-warnings",
+        "--cookies", "cookies.txt",
+        "--extractor-args", "youtube:player_client=android_vr,ios,tv,web;player_skip=webpage,configs",
+        url,
+    ]
+
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    def generate():
+        try:
+            while True:
+                chunk = process.stdout.read(65536)  # Read 64 KB at a time
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            process.stdout.close()
+            process.stderr.close()
+            process.wait()
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="video/x-matroska",
+        headers={
+            "Content-Disposition": f'attachment; filename="{title}.mkv"',
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # crucial for fast streaming on platforms like Render
+        },
+    )
 
 
 # ──────────────────────────── main ────────────────────────────
