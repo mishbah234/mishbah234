@@ -96,7 +96,9 @@ def api_extract():
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
-        "socket_timeout": 30
+        "socket_timeout": 30,
+        # Spoof the Android YouTube app. YouTube often only blocks web server traffic, not mobile devices.
+        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}}
     }
 
     try:
