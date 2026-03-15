@@ -1,11 +1,11 @@
 services:
-  - type: worker
+  - type: web
     name: youtube-downloader-bot
     env: python
     region: ohio
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python bot.py"
+    startCommand: "gunicorn bot:app --bind 0.0.0.0:$PORT"
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0

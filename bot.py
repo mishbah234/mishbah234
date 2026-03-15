@@ -113,7 +113,27 @@ def handle_message(message):
         except Exception:
             pass
 
-# ──────────────────────────── main ────────────────────────────
-if __name__ == "__main__":
-    print("\n🤖 Telegram Video Downloader Bot is running...")
+# ──────────────────────────── Render web server dummy ────────────────────────────
+# Render free tier requires a Web Service that binds to a port. 
+# We run a dummy Flask server on the main thread and run the Telegram bot in a background thread.
+from flask import Flask
+import threading
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🤖 Telegram Bot is running in the background!"
+
+def run_bot():
+    print("\n🤖 Telegram Video Downloader Bot is starting...")
     bot.infinity_polling()
+
+# Start the bot thread immediately when Gunicorn loads this file
+bot_thread = threading.Thread(target=run_bot)
+bot_thread.daemon = True
+bot_thread.start()
+
+if __name__ == "__main__":
+    # This is for local testing only. Render uses Gunicorn to run `app`.
+    app.run(host="0.0.0.0", port=5000)
