@@ -1,64 +1,82 @@
 import os
 import re
 import uuid
-import telebot
+import glob
+import asyncio
+from pyrogram import Client, filters
+from pyrogram.types import Message
 import yt_dlp
 
 # ──────────────────────────── config ────────────────────────────
-# Get the token from Environment Variables (set in Render.com Dashboard)
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+API_ID = int(os.environ.get("API_ID", "24223583"))
+API_HASH = os.environ.get("API_HASH", "8601a6f42f20a392f241bd33b8bf6b10")
 
 if not BOT_TOKEN:
-    print("❌ ERROR: TELEGRAM_BOT_TOKEN is missing! Please set it in your environment variables.")
+    print("❌ ERROR: TELEGRAM_BOT_TOKEN is missing!")
     exit(1)
 
-bot = telebot.TeleBot(BOT_TOKEN)
+# Pyrogram uses MTProto protocol — supports up to 2GB file uploads!
+bot = Client(
+    "video_bot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN,
+    in_memory=True,  # Don't create a session file on disk
+)
 
-# Telegram maximum upload size for bots is 50MB
-MAX_FILE_SIZE_BYTES = 49_000_000  # 49 MB just to be safe
+# 2 GB limit (Telegram's absolute maximum for bots via MTProto)
+MAX_FILE_SIZE_BYTES = 2_000_000_000
 
 # ──────────────────────────── helpers ────────────────────────────
 def _safe_filename(title):
     name = re.sub(r'[^\w\s\-]', '', title).strip()
     return name[:120] or "video"
 
-# ──────────────────────────── bot logic ────────────────────────────
 
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
+def _find_downloaded_file(task_id):
+    """Find the actual file yt-dlp downloaded (it may change the extension)."""
+    matches = glob.glob(f"download_{task_id}_*")
+    if matches:
+        return matches[0]
+    return None
+
+
+# ──────────────────────────── bot handlers ────────────────────────────
+
+@bot.on_message(filters.command(["start", "help"]))
+async def send_welcome(client: Client, message: Message):
     welcome_text = (
-        "👋 Welcome to the Video Downloader Bot!\n\n"
-        "Send me a link to a **YouTube** or **Instagram** video, and I will download it for you.\n\n"
-        "*(Note: Telegram limits bots to 50MB files, so long or 4K videos might be sent in lower quality to fit the limit!)*"
+        "👋 **Welcome to the Video Downloader Bot!**\n\n"
+        "Send me a link to a **YouTube** or **Instagram** video, "
+        "and I will download it for you.\n\n"
+        "📦 Supports files up to **2 GB**!"
     )
-    bot.reply_to(message, welcome_text, parse_mode="Markdown")
+    await message.reply_text(welcome_text)
 
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
+@bot.on_message(filters.text & filters.private)
+async def handle_message(client: Client, message: Message):
     url = message.text.strip()
-    
-    # Very basic URL check
+
+    # Basic URL check
     if not url.startswith("http://") and not url.startswith("https://"):
-        bot.reply_to(message, "⚠️ Please send a valid URL starting with http:// or https://")
+        await message.reply_text("⚠️ Please send a valid URL starting with http:// or https://")
         return
 
     # Acknowledge the request
-    status_msg = bot.reply_to(message, "⏳ *Extracting video info...*", parse_mode="Markdown")
-    
-    # Create a unique filename for this download
+    status_msg = await message.reply_text("⏳ **Extracting video info...**")
+
     task_id = uuid.uuid4().hex[:8]
     output_template = f"download_{task_id}_%(title)s.%(ext)s"
 
-    # Configure yt-dlp to download the best format under 50MB
-    # We prioritize mp4, but fallback to anything under 50MB if needed.
     ydl_opts = {
-        "format": "best[filesize<50M][ext=mp4]/best[filesize<50M]/worst",
+        "format": "best[ext=mp4]/best",
         "outtmpl": output_template,
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
-        "cookiefile": "cookies.txt",  # Still using cookies to bypass YouTube blocks if they exist
+        "merge_output_format": "mp4",
         "extractor_args": {
             "youtube": {
                 "player_client": ["android_vr", "ios", "tv", "web"],
@@ -67,55 +85,69 @@ def handle_message(message):
         }
     }
 
+    # Use cookies if available
+    if os.path.exists("cookies.txt"):
+        ydl_opts["cookiefile"] = "cookies.txt"
+
     downloaded_file = None
     try:
-        # Step 1: Download the video
-        bot.edit_message_text("⏳ *Downloading video... Please wait...*", chat_id=message.chat.id, message_id=status_msg.message_id, parse_mode="Markdown")
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            # Find the actual exact filename that yt-dlp saved it as
-            downloaded_file = ydl.prepare_filename(info)
+        # Step 1: Download
+        await status_msg.edit_text("⏳ **Downloading video... Please wait...**")
 
-        # Step 2: Check if file exists and is under the 50MB limit
-        if not os.path.exists(downloaded_file):
+        # Run yt-dlp in a thread so we don't block asyncio
+        loop = asyncio.get_event_loop()
+        info = await loop.run_in_executor(None, lambda: _download_video(ydl_opts, url))
+
+        # Find the file yt-dlp actually saved
+        downloaded_file = _find_downloaded_file(task_id)
+
+        if not downloaded_file or not os.path.exists(downloaded_file):
             raise Exception("File failed to download.")
-        
+
         file_size = os.path.getsize(downloaded_file)
+        title = info.get("title", "video")
+
         if file_size > MAX_FILE_SIZE_BYTES:
             os.remove(downloaded_file)
-            bot.edit_message_text("❌ *Error:* This video is too large for Telegram (Over 50MB).", chat_id=message.chat.id, message_id=status_msg.message_id, parse_mode="Markdown")
+            await status_msg.edit_text(
+                "❌ **Error:** This video is over 2 GB, which is Telegram's absolute maximum."
+            )
             return
 
-        # Step 3: Upload to Telegram
-        bot.edit_message_text("📤 *Uploading to Telegram...*", chat_id=message.chat.id, message_id=status_msg.message_id, parse_mode="Markdown")
-        
-        with open(downloaded_file, 'rb') as video_data:
-            bot.send_video(
-                chat_id=message.chat.id,
-                video=video_data,
-                caption=info.get("title", "Here is your video!"),
-                reply_to_message_id=message.message_id
-            )
-            
-        # Delete the status message since we successfully sent the video
-        bot.delete_message(chat_id=message.chat.id, message_id=status_msg.message_id)
+        # Step 2: Upload to Telegram via MTProto (supports up to 2GB!)
+        size_mb = round(file_size / (1024 * 1024), 1)
+        await status_msg.edit_text(f"📤 **Uploading to Telegram... ({size_mb} MB)**")
+
+        # Pyrogram's send_video handles large files natively via MTProto
+        await message.reply_video(
+            video=downloaded_file,
+            caption=f"🎬 **{title}**\n📦 {size_mb} MB",
+            supports_streaming=True,
+        )
+
+        # Delete status message
+        await status_msg.delete()
 
     except Exception as e:
-        error_text = f"❌ *Failed to download.*\n\n`{str(e)[:500]}`\n\n*(Make sure the link is public and valid)*"
-        bot.edit_message_text(error_text, chat_id=message.chat.id, message_id=status_msg.message_id, parse_mode="Markdown")
-    
+        error_text = f"❌ **Failed to download.**\n\n`{str(e)[:500]}`\n\n*(Make sure the link is public and valid)*"
+        await status_msg.edit_text(error_text)
+
     finally:
-        # Cleanup: ALWAYS try to delete the file from the server so we don't run out of disk space
+        # Cleanup
         try:
             if downloaded_file and os.path.exists(downloaded_file):
                 os.remove(downloaded_file)
         except Exception:
             pass
 
+
+def _download_video(ydl_opts, url):
+    """Blocking function to download a video. Runs in executor."""
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        return ydl.extract_info(url, download=True)
+
+
 # ──────────────────────────── Render web server dummy ────────────────────────────
-# Render free tier requires a Web Service that binds to a port. 
-# We run a dummy Flask server on the main thread and run the Telegram bot in a background thread.
 from flask import Flask
 import threading
 
@@ -126,14 +158,14 @@ def home():
     return "🤖 Telegram Bot is running in the background!"
 
 def run_bot():
-    print("\n🤖 Telegram Video Downloader Bot is starting...")
-    bot.infinity_polling()
+    print("\n🤖 Telegram Video Downloader Bot is starting (Pyrogram MTProto - 2GB support)...")
+    bot.run()
 
-# Start the bot thread immediately when Gunicorn loads this file
+# Start the bot in a background thread when Gunicorn loads
 bot_thread = threading.Thread(target=run_bot)
 bot_thread.daemon = True
 bot_thread.start()
 
 if __name__ == "__main__":
-    # This is for local testing only. Render uses Gunicorn to run `app`.
+    # Local testing
     app.run(host="0.0.0.0", port=5000)
