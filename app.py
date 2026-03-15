@@ -97,8 +97,15 @@ def api_extract():
         "quiet": True,
         "no_warnings": True,
         "socket_timeout": 30,
-        # Spoof the Android YouTube app. YouTube often only blocks web server traffic, not mobile devices.
-        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}}
+        "cookiefile": "cookies.txt",  
+        # IN 2024, YOUTUBE BLOCKS THE DEFAULT WEB AND ANDROID CLIENTS ON CLOUD IPS.
+        # We must spoof older clients or TV clients that don't enforce the 'po_token' bot checks yet.
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android_vr", "ios", "tv", "web"], 
+                "player_skip": ["webpage", "configs"]
+            }
+        }
     }
 
     try:
