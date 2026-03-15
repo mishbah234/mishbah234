@@ -1,4 +1,2 @@
-flask
+pyTelegramBotAPI==4.14.0
 yt-dlp
-gunicorn
-imageio-ffmpeg
