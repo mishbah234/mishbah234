@@ -434,6 +434,9 @@ def home():
 
 def run_bot():
     print("\n🤖 Telegram Video Downloader Bot is starting (2GB MTProto)...")
+    # Gunicorn threads don't have an asyncio event loop, so we create one
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     bot.run()
 
 bot_thread = threading.Thread(target=run_bot)
