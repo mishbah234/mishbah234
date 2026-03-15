@@ -87,7 +87,7 @@ def api_extract():
     height = chosen["height"]
     
     if height:
-        fmt = f"best[height<={height}][ext=mp4]/best[ext=mp4]/best"
+        fmt = f"best[height<={height}][ext=mp4]/best[height<={height}]/best[ext=mp4]/best"
     else:
         fmt = "best[ext=mp4]/best"
 
