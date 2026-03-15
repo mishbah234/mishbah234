@@ -434,10 +434,15 @@ def home():
 
 def run_bot():
     print("\n🤖 Telegram Video Downloader Bot is starting (2GB MTProto)...")
-    # Gunicorn threads don't have an asyncio event loop, so we create one
+    # Create a brand new event loop for this thread
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    bot.run()
+    # bot.start() begins polling WITHOUT waiting for OS signals (unlike bot.run())
+    # This is critical because daemon threads can't receive OS signals
+    loop.run_until_complete(bot.start())
+    print("✅ Bot is now polling for messages!")
+    # Keep the event loop alive forever so the bot keeps listening
+    loop.run_forever()
 
 bot_thread = threading.Thread(target=run_bot)
 bot_thread.daemon = True
