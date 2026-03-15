@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Download YouTube videos in 4K, 2K, 1080p and more — streams directly to your browser.">
+    <title>YouTube Downloader — 4K / 2K</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Animated background blobs -->
+    <div class="bg-blob blob-1"></div>
+    <div class="bg-blob blob-2"></div>
+    <div class="bg-blob blob-3"></div>
+
+    <main class="container">
+        <!-- Header -->
+        <header class="header" id="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                </div>
+                <div>
+                    <h1>YouTube Downloader</h1>
+                    <p class="tagline">4K · 2K · 1080p · 720p</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Download Card -->
+        <section class="card" id="download-card">
+            <form id="download-form" autocomplete="off">
+                <!-- URL Input -->
+                <div class="input-group" id="url-group">
+                    <label for="url-input">Paste YouTube URL</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                        </span>
+                        <input type="url" id="url-input" placeholder="https://www.youtube.com/watch?v=..." required>
+                    </div>
+                </div>
+
+                <!-- Quality Selector -->
+                <div class="input-group" id="quality-group">
+                    <label for="quality-select">Video Quality</label>
+                    <div class="quality-options">
+                        <label class="quality-option selected" data-value="2160">
+                            <input type="radio" name="quality" value="2160" checked>
+                            <span class="quality-badge">4K</span>
+                            <span class="quality-label">2160p</span>
+                        </label>
+                        <label class="quality-option" data-value="1440">
+                            <input type="radio" name="quality" value="1440">
+                            <span class="quality-badge">2K</span>
+                            <span class="quality-label">1440p</span>
+                        </label>
+                        <label class="quality-option" data-value="1080">
+                            <input type="radio" name="quality" value="1080">
+                            <span class="quality-badge">FHD</span>
+                            <span class="quality-label">1080p</span>
+                        </label>
+                        <label class="quality-option" data-value="720">
+                            <input type="radio" name="quality" value="720">
+                            <span class="quality-badge">HD</span>
+                            <span class="quality-label">720p</span>
+                        </label>
+                        <label class="quality-option" data-value="best">
+                            <input type="radio" name="quality" value="best">
+                            <span class="quality-badge">★</span>
+                            <span class="quality-label">Best</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Download Button -->
+                <button type="submit" class="btn-download" id="btn-download">
+                    <span class="btn-text">Download Video</span>
+                    <span class="btn-loader"></span>
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </button>
+            </form>
+
+            <!-- Extracting Spinner (hidden by default) -->
+            <div class="extracting-section" id="extracting-section">
+                <div class="extract-spinner"></div>
+                <h3>Extracting video info…</h3>
+                <p>This usually takes a few seconds</p>
+            </div>
+
+            <!-- Video Info + Download Link (hidden by default) -->
+            <div class="result-section" id="result-section">
+                <div class="video-preview" id="video-preview">
+                    <img id="video-thumbnail" src="" alt="Video thumbnail">
+                    <div class="video-meta">
+                        <h3 id="video-title">Video Title</h3>
+                        <p id="video-duration"></p>
+                    </div>
+                </div>
+                <a class="btn-save" id="btn-save" href="#">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Save to Computer
+                </a>
+                <p class="stream-note">⚡ Video streams directly — no server storage used</p>
+                <button class="btn-another" id="btn-another">Download Another</button>
+            </div>
+
+            <!-- Error Section (hidden by default) -->
+            <div class="error-section" id="error-section">
+                <div class="error-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                    </svg>
+                </div>
+                <h3>Something went wrong</h3>
+                <p id="error-message">An error occurred.</p>
+                <button class="btn-another" id="btn-retry">Try Again</button>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Powered by <strong>yt-dlp</strong> &amp; <strong>Flask</strong> · Requires <strong>ffmpeg</strong> for 4K/2K</p>
+        </footer>
+    </main>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
