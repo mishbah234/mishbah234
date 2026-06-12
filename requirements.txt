@@ -1,5 +1,2 @@
 pyrogram
-tgcrypto
-yt-dlp
-flask
-gunicorn
+tgc
