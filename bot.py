@@ -8,7 +8,7 @@ import cloudscraper
 # ==========================================
 # 1. CONFIGURATION (Sirf Token Change Karo)
 # ==========================================
-TOKEN = 'YOUR_BOT_TOKEN_HERE'  # <--- APNA TOKEN YAHAN DAALO
+TOKEN = '8212126889:AAGWBN6dMhyufJU51KlbRG94PGeW3IgEYPo'  # <--- APNA TOKEN YAHAN DAALO
 bot = telebot.TeleBot(TOKEN)
 
 # Cloudscraper Setup (Ab cookie ki zarurat nahi, yeh khud bypass karega)
