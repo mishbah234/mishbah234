@@ -6,12 +6,12 @@ import threading
 from flask import Flask
 
 # ==========================================
-# 1. CONFIGURATION
+# 1. CONFIGURATION (Sirf Token Change Karo)
 # ==========================================
-TOKEN = 'YOUR_BOT_TOKEN_HERE'  # Yahan apna BotFather ka Token daalo
+TOKEN = '8212126889:AAGWBN6dMhyufJU51KlbRG94PGeW3IgEYPo'  # <--- APNA TOKEN YAHAN DAALO
 bot = telebot.TeleBot(TOKEN)
 
-# Headers (Cloudflare cookie yahan update karna hoga jab expire ho jaye)
+# Cloudflare Cookie (Jab bot API Error de, toh isko browser se naya laakar yahan badalna)
 headers = {
     "User-Agent": "Mozilla/5.0 (Linux; Android 15; TECNO LJ8k Build/AP3A.240905.015.A2; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/149.0.7827.159 Mobile Safari/537.36",
     "Accept": "application/json, text/plain, */*",
@@ -19,7 +19,7 @@ headers = {
 }
 
 # ==========================================
-# 2. LOGIC & ALGORITHM
+# 2. DATA FETCH & ALGORITHM
 # ==========================================
 def get_api_data():
     try:
@@ -30,18 +30,16 @@ def get_api_data():
             data = response.json()
             history_list = data['data']['list'][:10]
             latest_period = history_list[0].get('issueNumber')
-            latest_color = history_list[0].get('color')
             color_history = [item.get('color') for item in history_list]
-            return latest_period, latest_color, color_history
+            return latest_period, color_history
     except Exception as e:
         print(f"API Error: {e}")
-    return None, None, None
+    return None, None
 
 def advanced_prediction_algorithm(color_history):
     if not color_history or len(color_history) < 4: return "Red"
     
     recent_3 = color_history[:3]
-    # Patterns
     if recent_3 == ['Red', 'Red', 'Red']: return "Green"
     elif recent_3 == ['Green', 'Green', 'Green']: return "Red"
     
@@ -50,7 +48,7 @@ def advanced_prediction_algorithm(color_history):
     return "Red" if red_count > green_count else "Green"
 
 # ==========================================
-# 3. INTERACTIVE COMMANDS
+# 3. TELEGRAM COMMANDS
 # ==========================================
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -59,7 +57,7 @@ def send_welcome(message):
 @bot.message_handler(commands=['predict'])
 def get_prediction(message):
     msg = bot.reply_to(message, "🔍 Market analyze kar raha hu...")
-    period, actual_color, color_history = get_api_data()
+    period, color_history = get_api_data()
     
     if period:
         next_period = str(int(period) + 1)
@@ -76,18 +74,30 @@ def get_prediction(message):
         bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ API Error! Cookie update karo.")
 
 # ==========================================
-# 4. RUNNER (Flask + Bot)
+# 4. SERVER & CRASH HANDLER (BULLETPROOF)
 # ==========================================
 app = Flask(__name__)
 
 @app.route('/')
-def home(): return "Bot is Online!"
+def home(): 
+    return "Bot is Online and Bulletproof!"
 
 def run_bot():
-    print("Bot Starting...")
-    # WEBHOOK FIX: Purana webhook delete karna zaroori hai
-    bot.remove_webhook()
-    bot.polling(none_stop=True)
+    print("Bot Background Engine Starting...")
+    
+    # 404/409 Error ko chup-chaap bypass karne ka tarika
+    try:
+        bot.remove_webhook()
+    except Exception:
+        pass 
+
+    # Agar server drop ho, toh bot crash nahi hoga, dobara try karega
+    while True:
+        try:
+            bot.polling(none_stop=True, timeout=60, long_polling_timeout=60)
+        except Exception as e:
+            print(f"Telegram server hichki le raha hai: {e}. 5 sec me restart kar raha hu...")
+            time.sleep(5)
 
 if __name__ == "__main__":
     threading.Thread(target=run_bot, daemon=True).start()
