@@ -2,19 +2,25 @@ import telebot
 import requests
 import time
 import os
+import threading
 from flask import Flask
 
-# ----------------- CONFIGURATION -----------------
-TOKEN = '8217433227:AAEYXiH0wYOztkjU494uWfk5qyJ_BeYPpYY' # Yahan apna token daalna
+# ==========================================
+# 1. CONFIGURATION
+# ==========================================
+TOKEN = 'YOUR_BOT_TOKEN_HERE'  # Yahan apna BotFather ka Token daalo
 bot = telebot.TeleBot(TOKEN)
 
+# Headers (Cloudflare cookie yahan update karna hoga jab expire ho jaye)
 headers = {
     "User-Agent": "Mozilla/5.0 (Linux; Android 15; TECNO LJ8k Build/AP3A.240905.015.A2; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/149.0.7827.159 Mobile Safari/537.36",
     "Accept": "application/json, text/plain, */*",
     "Cookie": "__cf_bm=JKZ0BlHlnVPWwaBNrjdE2kEueJRiaYTwdXcsn3Jis_s-1783791509.2740498-1.0.1.1-qr6qG9nCHoBIpiFQOOtrEZsV1l_WSeTxls7k2PRlfkw.t8uDCnCmN25VgTvm7iMXnk7P4nuyBQN8EmyXiAqTpd88NM3yvAgh2qCXpC4qLa22udg6VBLb3KkG1tiHeF79"
 }
 
-# ----------------- LOGIC -----------------
+# ==========================================
+# 2. LOGIC & ALGORITHM
+# ==========================================
 def get_api_data():
     try:
         current_ts = int(time.time() * 1000)
@@ -35,6 +41,7 @@ def advanced_prediction_algorithm(color_history):
     if not color_history or len(color_history) < 4: return "Red"
     
     recent_3 = color_history[:3]
+    # Patterns
     if recent_3 == ['Red', 'Red', 'Red']: return "Green"
     elif recent_3 == ['Green', 'Green', 'Green']: return "Red"
     
@@ -42,38 +49,47 @@ def advanced_prediction_algorithm(color_history):
     green_count = color_history.count('Green')
     return "Red" if red_count > green_count else "Green"
 
-# ----------------- COMMAND HANDLERS -----------------
+# ==========================================
+# 3. INTERACTIVE COMMANDS
+# ==========================================
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "👋 **Welcome to VIP Predictor!**\n\nMain tumhare liye market trend analyze karta hu.\n\nCommands:\n/predict - Agla color janne ke liye")
+    bot.reply_to(message, "🚀 **VIP Prediction Bot Active!**\n\nCommands:\n/predict - Agla color janne ke liye")
 
 @bot.message_handler(commands=['predict'])
 def get_prediction(message):
-    bot.reply_to(message, "🔍 Market analyze kar raha hu, please wait...")
+    msg = bot.reply_to(message, "🔍 Market analyze kar raha hu...")
     period, actual_color, color_history = get_api_data()
     
     if period:
         next_period = str(int(period) + 1)
         prediction = advanced_prediction_algorithm(color_history)
-        
-        msg = (
+        result_msg = (
             f"🎯 **AI PREDICTION** 🎯\n\n"
             f"🎮 Game: WinGo 30S\n"
             f"🔢 Next Period: `{next_period}`\n"
             f"💡 Predict: **{prediction}**\n\n"
-            f"Note: Yeh prediction algorithm base par hai, apne risk par khele."
+            f"⚠️ *Play at your own risk!*"
         )
-        bot.reply_to(message, msg, parse_mode="Markdown")
+        bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text=result_msg, parse_mode="Markdown")
     else:
-        bot.reply_to(message, "❌ API Error: Server se response nahi mil raha, thodi der baad try karo.")
+        bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ API Error! Cookie update karo.")
 
-# ----------------- FLASK & RUNNER -----------------
+# ==========================================
+# 4. RUNNER (Flask + Bot)
+# ==========================================
 app = Flask(__name__)
+
 @app.route('/')
 def home(): return "Bot is Online!"
 
+def run_bot():
+    print("Bot Starting...")
+    # WEBHOOK FIX: Purana webhook delete karna zaroori hai
+    bot.remove_webhook()
+    bot.polling(none_stop=True)
+
 if __name__ == "__main__":
-    import threading
-    threading.Thread(target=lambda: bot.polling(none_stop=True)).start()
+    threading.Thread(target=run_bot, daemon=True).start()
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
