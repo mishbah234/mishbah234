@@ -5,8 +5,8 @@ import threading
 
 # Apna Bot Token aur Telegram Channel/Group ka ID yahan daalo
 # (Agar personal chat me chalana hai toh apni chat_id number daal dena)
-TOKEN = 'YOUR_BOT_TOKEN_HERE'
-CHANNEL_ID = '@your_channel_username' 
+TOKEN = '8212126889:AAGWBN6dMhyufJU51KlbRG94PGeW3IgEYPo'
+CHANNEL_ID = '@ShadeX_Predict' 
 
 bot = telebot.TeleBot(TOKEN)
 
