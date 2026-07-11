@@ -1,37 +1,41 @@
 import telebot
-import requests
 import time
 import os
 import threading
 from flask import Flask
+import cloudscraper
 
 # ==========================================
 # 1. CONFIGURATION (Sirf Token Change Karo)
 # ==========================================
-TOKEN = '8212126889:AAGWBN6dMhyufJU51KlbRG94PGeW3IgEYPo'  # <--- APNA TOKEN YAHAN DAALO
+TOKEN = 'YOUR_BOT_TOKEN_HERE'  # <--- APNA TOKEN YAHAN DAALO
 bot = telebot.TeleBot(TOKEN)
 
-# Cloudflare Cookie (Jab bot API Error de, toh isko browser se naya laakar yahan badalna)
+# Cloudscraper Setup (Ab cookie ki zarurat nahi, yeh khud bypass karega)
+scraper = cloudscraper.create_scraper() 
 headers = {
-    "User-Agent": "Mozilla/5.0 (Linux; Android 15; TECNO LJ8k Build/AP3A.240905.015.A2; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/149.0.7827.159 Mobile Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Cookie": "__cf_bm=JKZ0BlHlnVPWwaBNrjdE2kEueJRiaYTwdXcsn3Jis_s-1783791509.2740498-1.0.1.1-qr6qG9nCHoBIpiFQOOtrEZsV1l_WSeTxls7k2PRlfkw.t8uDCnCmN25VgTvm7iMXnk7P4nuyBQN8EmyXiAqTpd88NM3yvAgh2qCXpC4qLa22udg6VBLb3KkG1tiHeF79"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
 }
 
 # ==========================================
-# 2. DATA FETCH & ALGORITHM
+# 2. DATA FETCH & ALGORITHM (Auto Bypass)
 # ==========================================
 def get_api_data():
     try:
         current_ts = int(time.time() * 1000)
         api_url = f"https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json?ts={current_ts}"
-        response = requests.get(api_url, headers=headers)
+        
+        # requests.get ki jagah hum scraper.get use kar rahe hain
+        response = scraper.get(api_url, headers=headers)
+        
         if response.status_code == 200:
             data = response.json()
             history_list = data['data']['list'][:10]
             latest_period = history_list[0].get('issueNumber')
             color_history = [item.get('color') for item in history_list]
             return latest_period, color_history
+        else:
+            print(f"Bypass Failed! Status Code: {response.status_code}")
     except Exception as e:
         print(f"API Error: {e}")
     return None, None
@@ -40,6 +44,7 @@ def advanced_prediction_algorithm(color_history):
     if not color_history or len(color_history) < 4: return "Red"
     
     recent_3 = color_history[:3]
+    # Patterns
     if recent_3 == ['Red', 'Red', 'Red']: return "Green"
     elif recent_3 == ['Green', 'Green', 'Green']: return "Red"
     
@@ -71,7 +76,7 @@ def get_prediction(message):
         )
         bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text=result_msg, parse_mode="Markdown")
     else:
-        bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ API Error! Cookie update karo.")
+        bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id, text="❌ API Error! Security bahut high hai, baad me try karein.")
 
 # ==========================================
 # 4. SERVER & CRASH HANDLER (BULLETPROOF)
@@ -80,26 +85,29 @@ app = Flask(__name__)
 
 @app.route('/')
 def home(): 
-    return "Bot is Online and Bulletproof!"
+    return "VIP Bot is Online with Cloudscraper Bypass!"
 
 def run_bot():
     print("Bot Background Engine Starting...")
     
-    # 404/409 Error ko chup-chaap bypass karne ka tarika
+    # 404/409 Error Bypass
     try:
         bot.remove_webhook()
     except Exception:
         pass 
 
-    # Agar server drop ho, toh bot crash nahi hoga, dobara try karega
+    # Bulletproof Polling Loop
     while True:
         try:
             bot.polling(none_stop=True, timeout=60, long_polling_timeout=60)
         except Exception as e:
-            print(f"Telegram server hichki le raha hai: {e}. 5 sec me restart kar raha hu...")
+            print(f"Server slow hai: {e}. 5 sec me restart kar raha hu...")
             time.sleep(5)
 
 if __name__ == "__main__":
+    # Bot Start
     threading.Thread(target=run_bot, daemon=True).start()
+    
+    # Render Web Server
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
